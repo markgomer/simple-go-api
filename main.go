@@ -1,7 +1,7 @@
 package main
 
 import (
-	api "go-api/src/core"
+	"go-api/src/core"
 	// "go-api/src/db"
 	"log/slog"
 	"net/http"
@@ -20,7 +20,7 @@ func main() {
 
 func run() error {
     slog.Info("Creating Handler")
-    handler := api.NewHandler()
+    handler := core.NewHandler()
     slog.Info("Handler Created")
 
     server := http.Server{
