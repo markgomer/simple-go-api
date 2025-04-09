@@ -38,6 +38,20 @@ func (a Application) FindAll() []user {
     }
     return userSlice
 }
+
+func (a Application) FindById(query id) user {
+    var wanted *user
+    for id, user := range a.data {
+        if id == query {
+            wanted = &user
+        }
+    }
+    if wanted == nil {
+        slog.Info("No user found with id: ", "info", query)
+    }
+    return *wanted
+}
+
 func (a Application) PrettyPrintAll() {
     for id, user := range a.data {
         fmt.Printf("%v:\n", id)
