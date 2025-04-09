@@ -2,7 +2,7 @@ package main
 
 import (
 	"go-api/src/core"
-	// "go-api/src/db"
+	"go-api/src/database"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,6 +19,9 @@ func main() {
 }
 
 func run() error {
+    db := database.InitWithRandom(1)
+    db.PrettyPrintAll()
+
     slog.Info("Creating Handler")
     handler := core.NewHandler()
     slog.Info("Handler Created")
