@@ -31,6 +31,13 @@ func InitEmpty() *Application {
     return app
 }
 
+func (a Application) FindAll() []user {
+    var userSlice []user
+    for _, user := range a.data {
+        userSlice = append(userSlice, user)
+    }
+    return userSlice
+}
 func (a Application) PrettyPrintAll() {
     for id, user := range a.data {
         fmt.Printf("%v:\n", id)
