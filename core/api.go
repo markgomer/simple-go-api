@@ -21,8 +21,11 @@ func NewHandler() http.Handler {
      * Those functions have to be in the format:
      * func(rw http.ResponseWriter, req *http.Request) => void
     **/
-    router.Post("/endpoint1", handleFunc())
-    router.Get("/endpoint2", handleFunc())
+    router.Post("/api/users", handleFunc())
+    router.Get("/api/users", handleFunc())
+    router.Get("/api/users/:id", handleFunc())
+    router.Delete("/api/users/:id", handleFunc())
+    router.Put("/api/users/:id", handleFunc())
 
     return router
 }
