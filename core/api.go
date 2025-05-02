@@ -39,6 +39,7 @@ func NewHandler(db *database.Application) http.Handler {
     router.Get("/api/users/{id}", handleFindById(db))
     router.Delete("/api/users/{id}", handleFunc())
     router.Put("/api/users/{id}", handleFunc())
+    router.NotFound(handleNotFound())
 
     return router
 }
@@ -63,6 +64,12 @@ func handleFindById(db *database.Application) http.HandlerFunc {
     })
 }
 
+func handleNotFound() http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        slog.Error("Route not found:", "URL path", r.URL.Path)
+        return
+    }
+}
 
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
     rw.Header().Set("Content-Type", "application/json")
@@ -83,3 +90,4 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
         return
     }
 }
+
