@@ -5,12 +5,28 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/go-faker/faker/v4"
 )
 
+/* Types */
 type id uuid.UUID
 
+type user struct {
+	FirstName string
+	LastName  string
+	biography string
+}
+
 type Application struct {
-	data map[id]user
+    data map[id]user
+}
+
+/* Methods */
+func (u *user) InitRandomUser() *user {
+    u.FirstName = faker.FirstName()
+    u.LastName = faker.LastName()
+    u.biography = faker.Sentence()
+    return u
 }
 
 func InitWithRandom(numberOfEntries int) *Application {
@@ -50,6 +66,9 @@ func (a Application) FindById(query id) user {
         slog.Info("No user found with id: ", "info", query)
     }
     return *wanted
+
+func (u user) PrettyPrint() {
+    fmt.Printf("%s %s\nBiography: %s\n\n", u.FirstName, u.LastName, u.biography)
 }
 
 func (a Application) PrettyPrintAll() {
@@ -58,3 +77,4 @@ func (a Application) PrettyPrintAll() {
         user.PrettyPrint()
     }
 }
+
