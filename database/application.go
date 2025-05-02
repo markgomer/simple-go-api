@@ -95,7 +95,8 @@ func (u user) ToString() string {
 func (a Application) ToString() string {
     var appString strings.Builder
     for id, user := range a.data {
-        fmt.Fprintf(&appString, "%v:\n%s", id, user.ToString())
+        uid := uuid.UUID(id).String()
+        fmt.Fprintf(&appString, "%s:\n%s", uid, user.ToString())
     }
     return appString.String()
 }
