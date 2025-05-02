@@ -33,10 +33,11 @@ func InitWithRandom(numberOfEntries int) *Application {
     app := &Application{}
     app.data = make(map[id]user)
     for range numberOfEntries {
-        uid := id(uuid.New())
+        println(numberOfEntries)
+        uid := uuid.New()
         u := &user{}
         u.InitRandomUser()
-        app.data[uid] = *u
+        app.data[id(uid)] = *u
     }
     return app
 }
@@ -55,17 +56,31 @@ func (a Application) FindAll() []user {
     return userSlice
 }
 
-func (a Application) FindById(query id) user {
+func (a Application) FindById(query string) *user {
     var wanted *user
+    parsedQuery, err := uuid.Parse(query)
+    if err != nil {
+        slog.Error("Invalid ID", "error", err)
+        return nil
+    }
+    uid := id(parsedQuery)
     for id, user := range a.data {
-        if id == query {
+        if id == uid {
             wanted = &user
         }
     }
     if wanted == nil {
         slog.Info("No user found with id: ", "info", query)
     }
-    return *wanted
+    return wanted
+}
+
+func Insert(u user, a Application) {
+}
+
+func Update() { }
+
+func Delete() { }
 
 func (u user) PrettyPrint() {
     fmt.Printf("%s %s\nBiography: %s\n\n", u.FirstName, u.LastName, u.biography)
