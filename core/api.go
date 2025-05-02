@@ -36,9 +36,9 @@ func NewHandler(db *database.Application) http.Handler {
     **/
     router.Post("/api/users", handleFunc())
     router.Get("/api/users", handleFunc())
-    router.Get("/api/users/:id", handleFindById(db))
-    router.Delete("/api/users/:id", handleFunc())
-    router.Put("/api/users/:id", handleFunc())
+    router.Get("/api/users/{id}", handleFindById(db))
+    router.Delete("/api/users/{id}", handleFunc())
+    router.Put("/api/users/{id}", handleFunc())
 
     return router
 }
@@ -53,8 +53,10 @@ func handleFunc() http.HandlerFunc {
 func handleFindById(db *database.Application) http.HandlerFunc {
     return (
     func (rw http.ResponseWriter, req *http.Request) {
-        urlParam := chi.URLParam(req, ":id")       
-        if db.FindById(urlParam) == nil {}
+        urlParam := chi.URLParam(req, "id")       
+        if db.FindById(urlParam) == nil {
+            slog.Info("Id not found")
+        }
 
         sendJSON(rw, Response{}, http.StatusCreated)
         return

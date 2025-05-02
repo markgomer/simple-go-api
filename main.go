@@ -34,9 +34,7 @@ func run() error {
         WriteTimeout: 10 * time.Second,
         IdleTimeout: time.Minute,
     }
-    slog.Info("Server Created")
-
-    slog.Info("Server Running")
+    slog.Info("Server created and running on http://localhost:8080")
     if err := server.ListenAndServe(); err != nil {
         slog.Error("Internal Server Error", "error", err)
         return err
