@@ -20,8 +20,7 @@ type Response struct {
     Data any `json:"data,omitempty"`
 }
 
-func NewHandler() http.Handler {
-    db := database.InitWithRandom(60)
+func NewHandler(db *database.Application) http.Handler {
     router := chi.NewMux()
 
     // call middlewares

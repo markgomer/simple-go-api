@@ -3,9 +3,10 @@ package database
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
-	"github.com/google/uuid"
 	"github.com/go-faker/faker/v4"
+	"github.com/google/uuid"
 )
 
 /* Types */
@@ -33,10 +34,9 @@ func InitWithRandom(numberOfEntries int) *Application {
     app := &Application{}
     app.data = make(map[id]user)
     for range numberOfEntries {
-        println(numberOfEntries)
-        uid := uuid.New()
         u := &user{}
         u.InitRandomUser()
+        uid := uuid.New()
         app.data[id(uid)] = *u
     }
     return app
@@ -82,14 +82,21 @@ func Update() { }
 
 func Delete() { }
 
-func (u user) PrettyPrint() {
-    fmt.Printf("%s %s\nBiography: %s\n\n", u.FirstName, u.LastName, u.biography)
+func (u user) ToString() string {
+    userString := fmt.Sprintf(
+        "%s %s\nBiography: %s\n",
+        u.FirstName,
+        u.LastName,
+        u.biography,
+    )
+    return userString
 }
 
-func (a Application) PrettyPrintAll() {
+func (a Application) ToString() string {
+    var appString strings.Builder
     for id, user := range a.data {
-        fmt.Printf("%v:\n", id)
-        user.PrettyPrint()
+        fmt.Fprintf(&appString, "%v:\n%s", id, user.ToString())
     }
+    return appString.String()
 }
 

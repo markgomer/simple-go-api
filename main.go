@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go-api/src/core"
 	"go-api/src/database"
 	"log/slog"
@@ -20,10 +21,10 @@ func main() {
 
 func run() error {
     db := database.InitWithRandom(1)
-    db.PrettyPrintAll()
+    fmt.Println(db.ToString())
 
     slog.Info("Creating Handler")
-    handler := core.NewHandler()
+    handler := core.NewHandler(db)
     slog.Info("Handler Created")
 
     server := http.Server{
