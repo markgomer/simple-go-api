@@ -23,6 +23,14 @@ type Application struct {
 }
 
 /* Methods */
+func NewUser(firstName string, lastName string, bio string) *user {
+    return &user{
+        FirstName: firstName,
+        LastName: lastName,
+        biography: bio,
+    }
+}
+
 func (u *user) InitRandomUser() *user {
     u.FirstName = faker.FirstName()
     u.LastName = faker.LastName()
