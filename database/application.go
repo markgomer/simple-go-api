@@ -83,7 +83,13 @@ func (a Application) FindById(query string) *user {
     return wanted
 }
 
-func Insert(u user, a Application) {
+func Insert(a Application, u user) (string, user) {
+    newid := id(uuid.New())
+    slog.Debug("id(newid)=", "debug", newid)
+    a.data[newid] = u
+    stringID := uuid.UUID(newid).String()
+    slog.Debug(stringID)
+    return stringID, u
 }
 
 func Update() { }
