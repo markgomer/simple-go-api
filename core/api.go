@@ -12,7 +12,9 @@ import (
 )
 
 type PostBody struct {
-    URL string `json:"url"`
+    Firstname string `json:"firstname"`
+    Lastname string `json:"lastname"`
+    Bio string `json:"bio"`
 }
 
 type Response struct {
@@ -34,7 +36,7 @@ func NewHandler(db *database.Application) http.Handler {
      * Those functions have to be in the format:
      * func(rw http.ResponseWriter, req *http.Request) => void
     **/
-    router.Post("/api/users", handleFunc())
+    router.Post("/api/users", handleInsertUser(db))
     router.Get("/api/users", handleFunc())
     router.Get("/api/users/{id}", handleFindById(db))
     router.Delete("/api/users/{id}", handleFunc())
@@ -48,6 +50,46 @@ func NewHandler(db *database.Application) http.Handler {
 func handleFunc() http.HandlerFunc {
     return func (rw http.ResponseWriter, req *http.Request) {
         return
+    }
+}
+
+/***
+  curl -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"firstname":"John","lastname":"Doe","bio":"This is my bio."}' \
+    http://localhost:8080/api/users
+***/
+func handleInsertUser(db * database.Application) http.HandlerFunc {
+    _ = db
+    return func (rw http.ResponseWriter, req *http.Request) {
+        // We will fill this struct with the post body, which is in json
+        var body PostBody
+
+        // Here we fill the var body with the request(POST) body
+        // if the user is trying to send invalid body, we kick his back
+        if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+            sendJSON(
+                rw,
+                Response{Error: "That's invalid body, man! Send JSON!"},
+                http.StatusUnprocessableEntity,
+            )
+            return 
+        }
+        // Check if json is complete
+        if body.Firstname == "" || body.Bio == "" || body.Lastname == "" {
+            sendJSON(
+                rw,
+                Response{
+                    Error: "Why dontcha tell me all about ya, ya dirty dawg?",
+                },
+                http.StatusBadRequest,
+            )
+        }
+        // TODO if user info is valid, then
+        // TODO save user in database
+        // TODO answer with HTTP 201 (created)
+        // TODO return new user's doc, including id
+
     }
 }
 
