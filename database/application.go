@@ -1,116 +1,100 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 
-	"github.com/go-faker/faker/v4"
 	"github.com/google/uuid"
 )
 
 /* Types */
-type id uuid.UUID
+type Id uuid.UUID
 
-type user struct {
-	FirstName string
-	LastName  string
-	biography string
-}
 
 type Application struct {
-    data map[id]user
+    data map[Id]User
 }
 
-/* Methods */
-func NewUser(firstName string, lastName string, bio string) *user {
-    return &user{
-        FirstName: firstName,
-        LastName: lastName,
-        biography: bio,
-    }
-}
-
-func (u *user) InitRandomUser() *user {
-    u.FirstName = faker.FirstName()
-    u.LastName = faker.LastName()
-    u.biography = faker.Sentence()
-    return u
-}
-
-func InitWithRandom(numberOfEntries int) *Application {
-    app := &Application{}
-    app.data = make(map[id]user)
-    for range numberOfEntries {
-        u := &user{}
-        u.InitRandomUser()
-        uid := uuid.New()
-        app.data[id(uid)] = *u
-    }
-    return app
-}
 
 func InitEmpty() *Application {
     app := &Application{}
-    app.data = make(map[id]user)
+    app.data = make(map[Id]User)
     return app
 }
 
-func (a Application) FindAll() []user {
-    var userSlice []user
-    for _, user := range a.data {
-        userSlice = append(userSlice, user)
+
+func InitWithRandom(numberOfEntries int) *Application {
+    app := InitEmpty()
+    for range numberOfEntries {
+        u := &User{}
+        u.InitRandomUser()
+        uid := uuid.New()
+        app.data[Id(uid)] = *u
+    }
+    return app
+}
+
+
+func (a *Application) FindAll() []User {
+    var userSlice []User
+    for _, User := range a.data {
+        userSlice = append(userSlice, User)
     }
     return userSlice
 }
 
-func (a Application) FindById(query string) *user {
-    var wanted *user
+
+func (a *Application) FindById(query string) *User {
+    var wanted *User
     parsedQuery, err := uuid.Parse(query)
     if err != nil {
         slog.Error("Invalid ID", "error", err)
         return nil
     }
-    uid := id(parsedQuery)
-    for id, user := range a.data {
-        if id == uid {
-            wanted = &user
+    uid := Id(parsedQuery)
+    for Id, User := range a.data {
+        if Id == uid {
+            wanted = &User
         }
     }
     if wanted == nil {
-        slog.Info("No user found with id: ", "info", query)
+        slog.Info("No User found with Id: ", "info", query)
     }
     return wanted
 }
 
-func Insert(a Application, u user) (string, user) {
-    newid := id(uuid.New())
-    slog.Debug("id(newid)=", "debug", newid)
-    a.data[newid] = u
-    stringID := uuid.UUID(newid).String()
-    slog.Debug(stringID)
-    return stringID, u
-}
 
-func Update() { }
-
-func Delete() { }
-
-func (u user) ToString() string {
-    userString := fmt.Sprintf(
-        "%s %s\nBiography: %s\n",
-        u.FirstName,
-        u.LastName,
-        u.biography,
+func (a *Application) Insert(u User) (User, Id, error) {
+    var (
+        err error
+        newUser User
     )
-    return userString
+    newid := Id(uuid.New())
+
+    if _, ok := a.data[newid]; ok {
+        err = errors.New("User Id already exists")
+        newUser = User{}
+    } else {
+        a.data[newid] = u
+    }
+
+    return newUser, newid, err
 }
 
-func (a Application) ToString() string {
+
+func (a *Application) Update() { }
+
+
+func (a *Application) Delete() { }
+
+
+func (a *Application) ToString() string {
     var appString strings.Builder
-    for id, user := range a.data {
-        uid := uuid.UUID(id).String()
-        fmt.Fprintf(&appString, "%s:\n%s", uid, user.ToString())
+    for Id, User := range a.data {
+        uid := uuid.UUID(Id).String()
+        fmt.Fprintf(&appString, "%s:\n%s", uid, User.ToString())
     }
     return appString.String()
 }

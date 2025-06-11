@@ -1,25 +1,27 @@
 package core
 
 import (
-	"go-api/src/database"
-	"log/slog"
-
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
+
+	"go-api/src/database"
 )
 
 type PostBody struct {
-    Firstname string `json:"firstname"`
-    Lastname string `json:"lastname"`
-    Bio string `json:"bio"`
+    Firstname string `json:"firstname,omitempty"`
+    Lastname string `json:"lastname,omitempty"`
+    Bio string `json:"biography,omitempty"`
 }
 
 type Response struct {
     Error string `json:"error,omitempty"`
-    Data any `json:"data,omitempty"`
+    UserID string `json:"userId,omitempty"`
+    PostBody PostBody `json:"postBody"`
 }
 
 func NewHandler(db *database.Application) http.Handler {
@@ -56,11 +58,10 @@ func handleFunc() http.HandlerFunc {
 /***
   curl -X POST \
     -H "Content-Type: application/json" \
-    -d '{"firstname":"John","lastname":"Doe","bio":"This is my bio."}' \
+    -d '{"firstname":"John","lastname":"Doe","biography":"This is my bio."}' \
     http://localhost:8080/api/users
 ***/
-func handleInsertUser(db * database.Application) http.HandlerFunc {
-    _ = db
+func handleInsertUser(db *database.Application) http.HandlerFunc {
     return func (rw http.ResponseWriter, req *http.Request) {
         // We will fill this struct with the post body, which is in json
         var body PostBody
@@ -70,26 +71,38 @@ func handleInsertUser(db * database.Application) http.HandlerFunc {
         if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
             sendJSON(
                 rw,
-                Response{Error: "That's invalid body, man! Send JSON!"},
+                Response{ Error: "That's invalid body, man! Send JSON!" },
                 http.StatusUnprocessableEntity,
             )
             return 
         }
-        // Check if json is complete
-        if body.Firstname == "" || body.Bio == "" || body.Lastname == "" {
-            sendJSON(
-                rw,
-                Response{
-                    Error: "Why dontcha tell me all about ya, ya dirty dawg?",
-                },
-                http.StatusBadRequest,
-            )
-        }
-        // TODO if user info is valid, then
-        // TODO save user in database
-        // TODO answer with HTTP 201 (created)
-        // TODO return new user's doc, including id
 
+        // err checks if user has all the fields
+        newUser, err  := database.NewUser(
+            body.Firstname,
+            body.Lastname,
+            body.Bio,
+        )
+        if err != nil {
+            response := Response{ Error: err.Error() }
+            sendJSON(rw, response, http.StatusBadRequest)
+            return
+        }
+
+        // err checks if the new id is unique
+        _, newId, err := db.Insert(*newUser)
+        if err != nil {
+            response := Response{ Error: err.Error() }
+            sendJSON(rw, response, http.StatusInternalServerError)
+            return
+        }
+
+        // Return new user's doc, including id
+        sendJSON(
+            rw,
+            Response{ UserID: uuid.UUID(newId).String(), PostBody: body, },
+            http.StatusCreated,
+        )
     }
 }
 
@@ -99,6 +112,8 @@ func handleFindById(db *database.Application) http.HandlerFunc {
         urlParam := chi.URLParam(req, "id")       
         if db.FindById(urlParam) == nil {
             slog.Info("Id not found")
+            sendJSON(rw, Response{}, http.StatusNotFound)
+            return
         }
 
         sendJSON(rw, Response{}, http.StatusCreated)
@@ -116,6 +131,7 @@ func handleNotFound() http.HandlerFunc {
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
     rw.Header().Set("Content-Type", "application/json")
 
+    // build Json
     data, err := json.Marshal(resp)
     if err != nil {
         slog.Error("failed to marshal json data", "error", err)
@@ -126,10 +142,10 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
         )
         return
     }
+
     rw.WriteHeader(status)
     if _, err := rw.Write(data); err != nil {
         slog.Error("failed to write json data", "error", err)
         return
     }
 }
-
