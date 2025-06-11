@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"go-api/src/core"
-	"go-api/src/database"
 	"log/slog"
 	"net/http"
 	"os"
 	"time"
+
+	"go-api/src/core"
+	"go-api/src/database"
 )
 
 func main() {

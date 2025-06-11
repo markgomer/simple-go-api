@@ -1,7 +1,7 @@
 package core
 
 import (
-	"go-api/src/database"
+	"fmt"
 	"log/slog"
 
 	"encoding/json"
@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"go-api/src/database"
 )
 
 type PostBody struct {
@@ -56,11 +58,10 @@ func handleFunc() http.HandlerFunc {
 /***
   curl -X POST \
     -H "Content-Type: application/json" \
-    -d '{"firstname":"John","lastname":"Doe","bio":"This is my bio."}' \
+    -d '{"firstname":"John","lastname":"Doe","biography":"This is my bio."}' \
     http://localhost:8080/api/users
 ***/
-func handleInsertUser(db * database.Application) http.HandlerFunc {
-    _ = db
+func handleInsertUser(db *database.Application) http.HandlerFunc {
     return func (rw http.ResponseWriter, req *http.Request) {
         // We will fill this struct with the post body, which is in json
         var body PostBody
@@ -75,18 +76,26 @@ func handleInsertUser(db * database.Application) http.HandlerFunc {
             )
             return 
         }
+        newUser, err  := database.NewUser(
+            body.Firstname,
+            body.Lastname,
+            body.Lastname,
+        )
         // Check if json is complete
-        if body.Firstname == "" || body.Bio == "" || body.Lastname == "" {
+        if err != nil {
+            fmt.Printf("ERROR=%s\n", err)
             sendJSON(
                 rw,
                 Response{
-                    Error: "Why dontcha tell me all about ya, ya dirty dawg?",
+                    Error: err.Error(),
                 },
                 http.StatusBadRequest,
             )
+            return
         }
         // TODO if user info is valid, then
         // TODO save user in database
+        db.Insert(*newUser)
         // TODO answer with HTTP 201 (created)
         // TODO return new user's doc, including id
 
@@ -116,6 +125,7 @@ func handleNotFound() http.HandlerFunc {
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
     rw.Header().Set("Content-Type", "application/json")
 
+    // build Json
     data, err := json.Marshal(resp)
     if err != nil {
         slog.Error("failed to marshal json data", "error", err)
@@ -126,10 +136,11 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
         )
         return
     }
+
+    // write header and 
     rw.WriteHeader(status)
     if _, err := rw.Write(data); err != nil {
         slog.Error("failed to write json data", "error", err)
         return
     }
 }
-
