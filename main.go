@@ -2,8 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"sort"
+	"time"
 )
 
 type user struct {
@@ -16,13 +20,16 @@ type application struct {
 	Data map[string]user `json:"data"`
 }
 
-func findAll(db *application) {
-	for id, entry := range db.Data {
-		fmt.Printf("%s: %s %s\n",id,entry.FirstName,entry.LastName)
+func findAll(db *application) []string {
+	allNames := make([]string, 0, len(db.Data))
+	for _, entry := range db.Data {
+		allNames = append(allNames, entry.FirstName + " " + entry.LastName)
 	}
+	sort.Strings(allNames)
+	return allNames
 }
 
-func quickCheck(e error) {
+func lazyCheck(e error) {
 	if e != nil {
 		panic(e)
 	}
@@ -30,11 +37,31 @@ func quickCheck(e error) {
 
 func main() {
 	jsonfile, err := os.ReadFile("./mock.json")
-	quickCheck(err)
+	lazyCheck(err)
 
 	var dbJson application
 	err = json.Unmarshal(jsonfile, &dbJson.Data)
-	quickCheck(err)
+	lazyCheck(err)
 
-	findAll(&dbJson)
+	mux := http.NewServeMux()
+	mux.HandleFunc(
+		"GET /api/users",
+		func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintln(w, findAll(&dbJson))
+		},
+	)
+
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  1 * time.Minute,
+	}
+	// careful that it locks the program
+	if err := server.ListenAndServe(); err != nil {
+		if !errors.Is(err, http.ErrServerClosed) {
+			panic(err)
+		}
+	}
 }
