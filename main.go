@@ -22,7 +22,7 @@ type application struct {
 
 type Response struct {
 	Error    string `json:"error,omitempty"`
-	PostBody any   `json:"postBody"`
+	Data any   `json:"postBody"`
 }
 
 func findAll(db *application) []string {
@@ -64,7 +64,7 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		allNames := findAll(dbJSON)
-		sendJSON(w, Response{PostBody: allNames}, http.StatusOK)
+		sendJSON(w, Response{Data: allNames}, http.StatusOK)
 	}
 }
 
