@@ -20,10 +20,15 @@ type application struct {
 	Data map[string]user `json:"data"`
 }
 
+type Response struct {
+	Error    string `json:"error,omitempty"`
+	PostBody any   `json:"postBody"`
+}
+
 func findAll(db *application) []string {
 	allNames := make([]string, 0, len(db.Data))
-	for _, entry := range db.Data {
-		allNames = append(allNames, entry.FirstName + " " + entry.LastName)
+	for id, entry := range db.Data {
+		allNames = append(allNames, id + ": " + entry.FirstName+" "+entry.LastName)
 	}
 	sort.Strings(allNames)
 	return allNames
@@ -35,20 +40,48 @@ func lazyCheck(e error) {
 	}
 }
 
+func sendJSON(rw http.ResponseWriter, resp Response, status int) {
+	rw.Header().Set("Content-Type", "application/json")
+	// build Json
+	data, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Println("Failed to marshal json data", "error", err)
+		sendJSON(
+			rw,
+			Response{Error: "Internal Server Error"},
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	rw.WriteHeader(status)
+	_, err = rw.Write(data)
+	if err != nil {
+		fmt.Println("Failed to write json data", "error", err)
+		return
+	}
+}
+
+func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		allNames := findAll(dbJSON)
+		sendJSON(w, Response{PostBody: allNames}, http.StatusOK)
+	}
+}
+
 func main() {
 	jsonfile, err := os.ReadFile("./mock.json")
 	lazyCheck(err)
 
-	var dbJson application
-	err = json.Unmarshal(jsonfile, &dbJson.Data)
+	var dbJSON application
+	err = json.Unmarshal(jsonfile, &dbJSON.Data)
 	lazyCheck(err)
 
 	mux := http.NewServeMux()
+
+	// endpoint in which we send response with list of everyone
 	mux.HandleFunc(
 		"GET /api/users",
-		func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintln(w, findAll(&dbJson))
-		},
+		handleGetUsers(&dbJSON),
 	)
 
 	server := &http.Server{
@@ -59,7 +92,8 @@ func main() {
 		IdleTimeout:  1 * time.Minute,
 	}
 	// careful that it locks the program
-	if err := server.ListenAndServe(); err != nil {
+	err = server.ListenAndServe()
+	if err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
 			panic(err)
 		}
