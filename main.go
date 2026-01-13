@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sort"
@@ -44,31 +45,15 @@ func findByID(db *application, id int) (user, error) {
 	return userFound, nil
 }
 
-func lazyCheck(e error) {
-	if e != nil {
-		panic(e)
+func insertNewUser(db *application, usr user) (int) {
+	nextID := 0
+	for id := range db.Data {
+		if id >= nextID {
+			nextID = id + 1
+		}
 	}
-}
-
-func sendJSON(rw http.ResponseWriter, resp Response, status int) {
-	rw.Header().Set("Content-Type", "application/json")
-	// build Json
-	data, err := json.Marshal(resp)
-	if err != nil {
-		fmt.Println("Failed to marshal json data", "error", err)
-		sendJSON(
-			rw,
-			Response{Error: "Internal Server Error"},
-			http.StatusInternalServerError,
-		)
-		return
-	}
-	rw.WriteHeader(status)
-	_, err = rw.Write(data)
-	if err != nil {
-		fmt.Println("Failed to write json data", "error", err)
-		return
-	}
+	db.Data[nextID] = usr
+	return nextID
 }
 
 func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +78,76 @@ func handleGetUserByID(dbJSON *application) func(w http.ResponseWriter, r *http.
 	}
 }
 
+func handleInsertNewUser(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			// max bytes error
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(
+					w,
+					"Too large of a request",
+					http.StatusRequestEntityTooLarge,
+				)
+			}
+			fmt.Println(err)
+			http.Error(
+				w,
+				"Internal Server Error",
+				http.StatusInternalServerError,
+			)
+		}
+		var u user
+		err = json.Unmarshal(data, &u)
+		if err != nil {
+			http.Error(w, "Invalid user format", http.StatusUnprocessableEntity)
+			return
+		}
+		if u.FirstName == "" {
+			http.Error(w, "First name missing", http.StatusBadRequest)
+			return
+		}
+		if u.LastName == "" {
+			http.Error(w, "Last name missing", http.StatusBadRequest)
+			return
+		}
+		if u.Biography == "" {
+			http.Error(w, "Biography missing", http.StatusBadRequest)
+			return
+		}
+		insertNewUser(dbJSON, u)
+	}
+}
+
+func sendJSON(rw http.ResponseWriter, resp Response, status int) {
+	rw.Header().Set("Content-Type", "application/json")
+	// build Json
+	data, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Println("Failed to marshal json data", "error", err)
+		sendJSON(
+			rw,
+			Response{Error: "Internal Server Error"},
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	rw.WriteHeader(status)
+	_, err = rw.Write(data)
+	if err != nil {
+		fmt.Println("Failed to write json data", "error", err)
+		return
+	}
+}
+
+func lazyCheck(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 func main() {
 	jsonfile, err := os.ReadFile("./mock.json")
 	lazyCheck(err)
@@ -101,9 +156,12 @@ func main() {
 	err = json.Unmarshal(jsonfile, &dbJSON.Data)
 	lazyCheck(err)
 
+	if dbJSON.Data == nil {
+		dbJSON.Data = make(map[int]user)
+	}
+
 	mux := http.NewServeMux()
 
-	// endpoint in which we send response with list of everyone
 	mux.HandleFunc(
 		"GET /api/users",
 		handleGetUsers(&dbJSON),
@@ -111,6 +169,10 @@ func main() {
 	mux.HandleFunc(
 		"GET /api/users/{id}",
 		handleGetUserByID(&dbJSON),
+	)
+	mux.HandleFunc(
+		"POST /api/users",
+		handleInsertNewUser(&dbJSON),
 	)
 
 	server := &http.Server{
