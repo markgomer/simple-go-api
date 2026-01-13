@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -17,21 +18,30 @@ type user struct {
 }
 
 type application struct {
-	Data map[string]user `json:"data"`
+	Data map[int]user `json:"data"`
 }
 
 type Response struct {
-	Error    string `json:"error,omitempty"`
-	Data any   `json:"postBody"`
+	Error string `json:"error,omitempty"`
+	Data  any    `json:"data"`
 }
 
 func findAll(db *application) []string {
 	allNames := make([]string, 0, len(db.Data))
 	for id, entry := range db.Data {
-		allNames = append(allNames, id + ": " + entry.FirstName+" "+entry.LastName)
+		idStr := fmt.Sprintf("%d", id)
+		allNames = append(allNames, entry.FirstName+" "+entry.LastName+"id: "+idStr)
 	}
 	sort.Strings(allNames)
 	return allNames
+}
+
+func findByID(db *application, id int) (user, error) {
+	userFound, exists := db.Data[id]
+	if !exists {
+		return user{}, fmt.Errorf("user with id %d not found", id)
+	}
+	return userFound, nil
 }
 
 func lazyCheck(e error) {
@@ -68,6 +78,21 @@ func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func handleGetUserByID(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idQuery := r.PathValue("id")
+		idInt, err := strconv.Atoi(idQuery)
+		lazyCheck(err)
+
+		userFound, err := findByID(dbJSON, idInt)
+		if err != nil {
+			sendJSON(w,Response{Error: err.Error()}, http.StatusNotFound)
+			return
+		}
+		sendJSON(w, Response{Data: userFound}, http.StatusOK)
+	}
+}
+
 func main() {
 	jsonfile, err := os.ReadFile("./mock.json")
 	lazyCheck(err)
@@ -82,6 +107,10 @@ func main() {
 	mux.HandleFunc(
 		"GET /api/users",
 		handleGetUsers(&dbJSON),
+	)
+	mux.HandleFunc(
+		"GET /api/users/{id}",
+		handleGetUserByID(&dbJSON),
 	)
 
 	server := &http.Server{
