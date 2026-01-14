@@ -90,18 +90,20 @@ func updateUser(db *application, id int, updatedUser user) (user, error) {
 	NOTE: Handlers
 */
 
-func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+func handleGetUsers(dbJSON *application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		allNames := findAll(dbJSON)
 		sendJSON(w, Response{Data: allNames}, http.StatusOK)
 	}
 }
 
-func handleGetUserByID(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+func handleGetUserByID(dbJSON *application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idQuery := r.PathValue("id")
 		idToUpdate, err := strconv.Atoi(idQuery)
-		lazyCheck(err)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
+		}
 
 		userFound, err := findByID(dbJSON, idToUpdate)
 		if err != nil {
@@ -239,19 +241,13 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	}
 }
 
-func lazyCheck(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func main() {
 	jsonfile, err := os.ReadFile("./mock.json")
-	lazyCheck(err)
+	if err != nil { panic(err) }
 
 	var dbJSON application
 	err = json.Unmarshal(jsonfile, &dbJSON.Data)
-	lazyCheck(err)
+	if err != nil { panic(err) }
 
 	if dbJSON.Data == nil {
 		dbJSON.Data = make(map[int]user)
