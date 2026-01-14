@@ -86,6 +86,16 @@ func updateUser(db *application, id int, updatedUser user) (user, error) {
 	return updatedUser, nil
 }
 
+func deleteUser(db *application, idToDelete int) (error) {
+	_, err := findByID(db, idToDelete)
+	if err != nil {
+		return err
+	}
+
+	delete(db.Data, idToDelete)
+	return nil
+}
+
 /*
 	NOTE: Handlers
 */
@@ -220,6 +230,29 @@ func handleUpdateUser(dbJSON *application) http.HandlerFunc {
 	}
 }
 
+func handleDeleteUser(db *application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request)  {
+		idQuery := r.PathValue("id")
+		idToDelete, err := strconv.Atoi(idQuery)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
+			return
+		}
+		err = deleteUser(db, idToDelete)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusNotFound)
+			return
+		}
+		sendJSON(
+			w,
+			Response{
+				Data: fmt.Sprintf("Deleted user id: %d", idToDelete),
+			},
+			http.StatusOK,
+		)
+	}
+}
+
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	rw.Header().Set("Content-Type", "application/json")
 	// build Json
@@ -270,6 +303,10 @@ func main() {
 	mux.HandleFunc(
 		"PUT /api/users/{id}",
 		handleUpdateUser(&dbJSON),
+	)
+	mux.HandleFunc(
+		"DELETE /api/users/{id}",
+		handleDeleteUser(&dbJSON),
 	)
 
 	server := &http.Server{
