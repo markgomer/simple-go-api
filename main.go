@@ -31,7 +31,7 @@ func findAll(db *application) []string {
 	allNames := make([]string, 0, len(db.Data))
 	for id, entry := range db.Data {
 		idStr := fmt.Sprintf("%d", id)
-		allNames = append(allNames, entry.FirstName+" "+entry.LastName+"id: "+idStr)
+		allNames = append(allNames, entry.FirstName+" "+entry.LastName+" id: "+idStr)
 	}
 	sort.Strings(allNames)
 	return allNames
@@ -86,22 +86,34 @@ func updateUser(db *application, id int, updatedUser user) (user, error) {
 	return updatedUser, nil
 }
 
+func deleteUser(db *application, idToDelete int) (error) {
+	_, err := findByID(db, idToDelete)
+	if err != nil {
+		return err
+	}
+
+	delete(db.Data, idToDelete)
+	return nil
+}
+
 /*
 	NOTE: Handlers
 */
 
-func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+func handleGetUsers(dbJSON *application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		allNames := findAll(dbJSON)
 		sendJSON(w, Response{Data: allNames}, http.StatusOK)
 	}
 }
 
-func handleGetUserByID(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+func handleGetUserByID(dbJSON *application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idQuery := r.PathValue("id")
 		idToUpdate, err := strconv.Atoi(idQuery)
-		lazyCheck(err)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
+		}
 
 		userFound, err := findByID(dbJSON, idToUpdate)
 		if err != nil {
@@ -218,6 +230,29 @@ func handleUpdateUser(dbJSON *application) http.HandlerFunc {
 	}
 }
 
+func handleDeleteUser(db *application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request)  {
+		idQuery := r.PathValue("id")
+		idToDelete, err := strconv.Atoi(idQuery)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
+			return
+		}
+		err = deleteUser(db, idToDelete)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusNotFound)
+			return
+		}
+		sendJSON(
+			w,
+			Response{
+				Data: fmt.Sprintf("Deleted user id: %d", idToDelete),
+			},
+			http.StatusOK,
+		)
+	}
+}
+
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	rw.Header().Set("Content-Type", "application/json")
 	// build Json
@@ -239,19 +274,13 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	}
 }
 
-func lazyCheck(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func main() {
 	jsonfile, err := os.ReadFile("./mock.json")
-	lazyCheck(err)
+	if err != nil { panic(err) }
 
 	var dbJSON application
 	err = json.Unmarshal(jsonfile, &dbJSON.Data)
-	lazyCheck(err)
+	if err != nil { panic(err) }
 
 	if dbJSON.Data == nil {
 		dbJSON.Data = make(map[int]user)
@@ -274,6 +303,10 @@ func main() {
 	mux.HandleFunc(
 		"PUT /api/users/{id}",
 		handleUpdateUser(&dbJSON),
+	)
+	mux.HandleFunc(
+		"DELETE /api/users/{id}",
+		handleDeleteUser(&dbJSON),
 	)
 
 	server := &http.Server{
