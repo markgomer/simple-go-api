@@ -45,16 +45,50 @@ func findByID(db *application, id int) (user, error) {
 	return userFound, nil
 }
 
-func insertNewUser(db *application, usr user) (int) {
+func insertNewUser(db *application, usr user) (int, error) {
+	// find next available id
 	nextID := 0
 	for id := range db.Data {
 		if id >= nextID {
 			nextID = id + 1
 		}
 	}
+
+	if usr.FirstName == "" {
+		return 0, errors.New("first name missing")
+	}
+	if usr.LastName == "" {
+		return 0, errors.New("last name missing")
+	}
+	if usr.Biography == "" {
+		return 0, errors.New("biography missing")
+	}
+
 	db.Data[nextID] = usr
-	return nextID
+	return nextID, nil
 }
+
+func updateUser(db *application, id int, updatedUser user) (user, error) {
+	_, err := findByID(db, id)
+	if err != nil {
+		return user{}, fmt.Errorf("user with id %d not found", id)
+	}
+	if updatedUser.FirstName == "" {
+		return user{}, errors.New("first name missing")
+	}
+	if updatedUser.LastName == "" {
+		return user{}, errors.New("last name missing")
+	}
+	if updatedUser.Biography == "" {
+		return user{}, errors.New("biography missing")
+	}
+	db.Data[id] = updatedUser
+	return updatedUser, nil
+}
+
+/*
+	NOTE: Handlers
+*/
 
 func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -66,10 +100,10 @@ func handleGetUsers(dbJSON *application) func(w http.ResponseWriter, r *http.Req
 func handleGetUserByID(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idQuery := r.PathValue("id")
-		idInt, err := strconv.Atoi(idQuery)
+		idToUpdate, err := strconv.Atoi(idQuery)
 		lazyCheck(err)
 
-		userFound, err := findByID(dbJSON, idInt)
+		userFound, err := findByID(dbJSON, idToUpdate)
 		if err != nil {
 			sendJSON(w,Response{Error: err.Error()}, http.StatusNotFound)
 			return
@@ -78,12 +112,68 @@ func handleGetUserByID(dbJSON *application) func(w http.ResponseWriter, r *http.
 	}
 }
 
-func handleInsertNewUser(dbJSON *application) func(w http.ResponseWriter, r *http.Request) {
+func handleInsertNewUser(dbJSON *application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 1024)
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
-			// max bytes error
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(
+					w,
+					"Too large of a request",
+					http.StatusRequestEntityTooLarge,
+				)
+				return
+			}
+			fmt.Println(err)
+			http.Error(
+				w,
+				"Internal Server Error",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+		var u user
+		err = json.Unmarshal(data, &u)
+		if err != nil {
+			fmt.Println("Failed to unmarshal json data", "error", err)
+			sendJSON(
+				w,
+				Response{Error: "Internal Server Error"},
+				http.StatusInternalServerError,
+			)
+			return
+		}
+		newID, err := insertNewUser(dbJSON, u)
+		if err != nil {
+			fmt.Println(err)
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
+			return
+		}
+		sendJSON(w, Response{Data: fmt.Sprintf("New id = %d", newID)}, http.StatusOK)
+	}
+}
+
+func handleUpdateUser(dbJSON *application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		idQuery := r.PathValue("id")
+		idToUpdate, err := strconv.Atoi(idQuery)
+		if err != nil {
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
+			return
+		}
+
+		_, err = findByID(dbJSON, idToUpdate)
+		if err != nil {
+			sendJSON(w,Response{Error: err.Error()}, http.StatusNotFound)
+			return
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		bodyData, err := io.ReadAll(r.Body)
+		if err != nil {
 			var maxErr *http.MaxBytesError
 			if errors.As(err, &maxErr) {
 				http.Error(
@@ -99,25 +189,32 @@ func handleInsertNewUser(dbJSON *application) func(w http.ResponseWriter, r *htt
 				http.StatusInternalServerError,
 			)
 		}
-		var u user
-		err = json.Unmarshal(data, &u)
+		var updatedUser user
+		err = json.Unmarshal(bodyData, &updatedUser)
 		if err != nil {
-			http.Error(w, "Invalid user format", http.StatusUnprocessableEntity)
+			fmt.Println("Failed to unmarshal json data", "error", err)
+			sendJSON(
+				w,
+				Response{Error: "Internal Server Error"},
+				http.StatusInternalServerError,
+			)
 			return
 		}
-		if u.FirstName == "" {
-			http.Error(w, "First name missing", http.StatusBadRequest)
+
+		updatedUser, err = updateUser(dbJSON, idToUpdate, updatedUser)
+		if err != nil {
+			fmt.Println(err)
+			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
 			return
 		}
-		if u.LastName == "" {
-			http.Error(w, "Last name missing", http.StatusBadRequest)
-			return
-		}
-		if u.Biography == "" {
-			http.Error(w, "Biography missing", http.StatusBadRequest)
-			return
-		}
-		insertNewUser(dbJSON, u)
+
+		sendJSON(
+			w,
+			Response{
+				Data: fmt.Sprintf("User updated = %v", updatedUser),
+			},
+			http.StatusOK,
+		)
 	}
 }
 
@@ -174,6 +271,10 @@ func main() {
 		"POST /api/users",
 		handleInsertNewUser(&dbJSON),
 	)
+	mux.HandleFunc(
+		"PUT /api/users/{id}",
+		handleUpdateUser(&dbJSON),
+	)
 
 	server := &http.Server{
 		Addr:         ":8080",
@@ -183,10 +284,12 @@ func main() {
 		IdleTimeout:  1 * time.Minute,
 	}
 	// careful that it locks the program
+	fmt.Println("Server up!")
 	err = server.ListenAndServe()
 	if err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
 			panic(err)
 		}
 	}
+	fmt.Println("Server down!")
 }
