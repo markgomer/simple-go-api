@@ -31,7 +31,7 @@ func findAll(db *application) []string {
 	allNames := make([]string, 0, len(db.Data))
 	for id, entry := range db.Data {
 		idStr := fmt.Sprintf("%d", id)
-		allNames = append(allNames, entry.FirstName+" "+entry.LastName+"id: "+idStr)
+		allNames = append(allNames, entry.FirstName+" "+entry.LastName+" id: "+idStr)
 	}
 	sort.Strings(allNames)
 	return allNames
