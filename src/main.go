@@ -6,21 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"time"
 )
-
-type user struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Biography string `json:"biography"`
-}
-
-type application struct {
-	Data map[int]user `json:"data"`
-}
 
 type Response struct {
 	Error string `json:"error,omitempty"`
@@ -253,6 +242,10 @@ func handleDeleteUser(db *application) http.HandlerFunc {
 	}
 }
 
+/*
+  NOTE: helper
+*/
+
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	rw.Header().Set("Content-Type", "application/json")
 	// build Json
@@ -274,41 +267,37 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	}
 }
 
+/*
+	NOTE: Entrypoint
+*/
 func main() {
-	jsonfile, err := os.ReadFile("./mock.json")
-	if err != nil { panic(err) }
+	// "Load" "DB"
+	dbJSON:= LoadDB()
 
-	var dbJSON application
-	err = json.Unmarshal(jsonfile, &dbJSON.Data)
-	if err != nil { panic(err) }
-
-	if dbJSON.Data == nil {
-		dbJSON.Data = make(map[int]user)
-	}
-
+	// set up handler
 	mux := http.NewServeMux()
-
 	mux.HandleFunc(
 		"GET /api/users",
-		handleGetUsers(&dbJSON),
+		handleGetUsers(dbJSON),
 	)
 	mux.HandleFunc(
 		"GET /api/users/{id}",
-		handleGetUserByID(&dbJSON),
+		handleGetUserByID(dbJSON),
 	)
 	mux.HandleFunc(
 		"POST /api/users",
-		handleInsertNewUser(&dbJSON),
+		handleInsertNewUser(dbJSON),
 	)
 	mux.HandleFunc(
 		"PUT /api/users/{id}",
-		handleUpdateUser(&dbJSON),
+		handleUpdateUser(dbJSON),
 	)
 	mux.HandleFunc(
 		"DELETE /api/users/{id}",
-		handleDeleteUser(&dbJSON),
+		handleDeleteUser(dbJSON),
 	)
 
+	// setup server
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      mux,
@@ -316,9 +305,10 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  1 * time.Minute,
 	}
+	// Start server
 	// careful that it locks the program
 	fmt.Println("Server up!")
-	err = server.ListenAndServe()
+	err := server.ListenAndServe()
 	if err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
 			panic(err)
