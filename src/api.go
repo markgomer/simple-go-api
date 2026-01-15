@@ -6,103 +6,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"sort"
 	"strconv"
-	"time"
 )
 
-type user struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Biography string `json:"biography"`
-}
-
-type application struct {
-	Data map[int]user `json:"data"`
-}
 
 type Response struct {
 	Error string `json:"error,omitempty"`
 	Data  any    `json:"data"`
 }
 
-func findAll(db *application) []string {
-	allNames := make([]string, 0, len(db.Data))
-	for id, entry := range db.Data {
-		idStr := fmt.Sprintf("%d", id)
-		allNames = append(allNames, entry.FirstName+" "+entry.LastName+" id: "+idStr)
-	}
-	sort.Strings(allNames)
-	return allNames
-}
-
-func findByID(db *application, id int) (user, error) {
-	userFound, exists := db.Data[id]
-	if !exists {
-		return user{}, fmt.Errorf("user with id %d not found", id)
-	}
-	return userFound, nil
-}
-
-func insertNewUser(db *application, usr user) (int, error) {
-	// find next available id
-	nextID := 0
-	for id := range db.Data {
-		if id >= nextID {
-			nextID = id + 1
-		}
-	}
-
-	if usr.FirstName == "" {
-		return 0, errors.New("first name missing")
-	}
-	if usr.LastName == "" {
-		return 0, errors.New("last name missing")
-	}
-	if usr.Biography == "" {
-		return 0, errors.New("biography missing")
-	}
-
-	db.Data[nextID] = usr
-	return nextID, nil
-}
-
-func updateUser(db *application, id int, updatedUser user) (user, error) {
-	_, err := findByID(db, id)
-	if err != nil {
-		return user{}, fmt.Errorf("user with id %d not found", id)
-	}
-	if updatedUser.FirstName == "" {
-		return user{}, errors.New("first name missing")
-	}
-	if updatedUser.LastName == "" {
-		return user{}, errors.New("last name missing")
-	}
-	if updatedUser.Biography == "" {
-		return user{}, errors.New("biography missing")
-	}
-	db.Data[id] = updatedUser
-	return updatedUser, nil
-}
-
-func deleteUser(db *application, idToDelete int) (error) {
-	_, err := findByID(db, idToDelete)
-	if err != nil {
-		return err
-	}
-
-	delete(db.Data, idToDelete)
-	return nil
-}
-
 /*
-	NOTE: Handlers
+NOTE: Handlers
 */
-
 func handleGetUsers(dbJSON *application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		allNames := findAll(dbJSON)
+		allNames := FindAll(dbJSON)
 		sendJSON(w, Response{Data: allNames}, http.StatusOK)
 	}
 }
@@ -115,9 +33,9 @@ func handleGetUserByID(dbJSON *application) http.HandlerFunc {
 			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
 		}
 
-		userFound, err := findByID(dbJSON, idToUpdate)
+		userFound, err := FindByID(dbJSON, idToUpdate)
 		if err != nil {
-			sendJSON(w,Response{Error: err.Error()}, http.StatusNotFound)
+			sendJSON(w, Response{Error: err.Error()}, http.StatusNotFound)
 			return
 		}
 		sendJSON(w, Response{Data: userFound}, http.StatusOK)
@@ -157,7 +75,7 @@ func handleInsertNewUser(dbJSON *application) http.HandlerFunc {
 			)
 			return
 		}
-		newID, err := insertNewUser(dbJSON, u)
+		newID, err := InsertNewUser(dbJSON, u)
 		if err != nil {
 			fmt.Println(err)
 			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
@@ -177,9 +95,9 @@ func handleUpdateUser(dbJSON *application) http.HandlerFunc {
 			return
 		}
 
-		_, err = findByID(dbJSON, idToUpdate)
+		_, err = FindByID(dbJSON, idToUpdate)
 		if err != nil {
-			sendJSON(w,Response{Error: err.Error()}, http.StatusNotFound)
+			sendJSON(w, Response{Error: err.Error()}, http.StatusNotFound)
 			return
 		}
 
@@ -213,7 +131,7 @@ func handleUpdateUser(dbJSON *application) http.HandlerFunc {
 			return
 		}
 
-		updatedUser, err = updateUser(dbJSON, idToUpdate, updatedUser)
+		updatedUser, err = UpdateUser(dbJSON, idToUpdate, updatedUser)
 		if err != nil {
 			fmt.Println(err)
 			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
@@ -231,14 +149,14 @@ func handleUpdateUser(dbJSON *application) http.HandlerFunc {
 }
 
 func handleDeleteUser(db *application) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request)  {
+	return func(w http.ResponseWriter, r *http.Request) {
 		idQuery := r.PathValue("id")
 		idToDelete, err := strconv.Atoi(idQuery)
 		if err != nil {
 			sendJSON(w, Response{Error: err.Error()}, http.StatusBadRequest)
 			return
 		}
-		err = deleteUser(db, idToDelete)
+		err = DeleteUser(db, idToDelete)
 		if err != nil {
 			sendJSON(w, Response{Error: err.Error()}, http.StatusNotFound)
 			return
@@ -252,6 +170,10 @@ func handleDeleteUser(db *application) http.HandlerFunc {
 		)
 	}
 }
+
+/*
+  NOTE: helper
+*/
 
 func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	rw.Header().Set("Content-Type", "application/json")
@@ -274,55 +196,27 @@ func sendJSON(rw http.ResponseWriter, resp Response, status int) {
 	}
 }
 
-func main() {
-	jsonfile, err := os.ReadFile("./mock.json")
-	if err != nil { panic(err) }
-
-	var dbJSON application
-	err = json.Unmarshal(jsonfile, &dbJSON.Data)
-	if err != nil { panic(err) }
-
-	if dbJSON.Data == nil {
-		dbJSON.Data = make(map[int]user)
-	}
-
+func SetupHandlers(db *application) (*http.ServeMux) {
 	mux := http.NewServeMux()
-
 	mux.HandleFunc(
 		"GET /api/users",
-		handleGetUsers(&dbJSON),
+		handleGetUsers(db),
 	)
 	mux.HandleFunc(
 		"GET /api/users/{id}",
-		handleGetUserByID(&dbJSON),
+		handleGetUserByID(db),
 	)
 	mux.HandleFunc(
 		"POST /api/users",
-		handleInsertNewUser(&dbJSON),
+		handleInsertNewUser(db),
 	)
 	mux.HandleFunc(
 		"PUT /api/users/{id}",
-		handleUpdateUser(&dbJSON),
+		handleUpdateUser(db),
 	)
 	mux.HandleFunc(
 		"DELETE /api/users/{id}",
-		handleDeleteUser(&dbJSON),
+		handleDeleteUser(db),
 	)
-
-	server := &http.Server{
-		Addr:         ":8080",
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  1 * time.Minute,
-	}
-	// careful that it locks the program
-	fmt.Println("Server up!")
-	err = server.ListenAndServe()
-	if err != nil {
-		if !errors.Is(err, http.ErrServerClosed) {
-			panic(err)
-		}
-	}
-	fmt.Println("Server down!")
+	return mux
 }
